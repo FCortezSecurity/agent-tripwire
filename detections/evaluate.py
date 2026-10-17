@@ -29,6 +29,8 @@ def fired_codes(events: list[dict], rules: list[Rule]) -> set[str]:
     matchers = {
         "sensitive": lambda e: matches(by_name["tripwire_sensitive_file_read"], e),
         "injection": lambda e: matches(by_name["tripwire_injection_in_tool_result"], e),
+        "internal_read": lambda e: matches(by_name["tripwire_internal_data_read"], e),
+        "external_send": lambda e: matches(by_name["tripwire_external_send"], e),
     }
     for corr in CORRELATIONS:
         if corr.check(events, matchers):

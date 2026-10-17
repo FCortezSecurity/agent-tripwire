@@ -123,3 +123,28 @@ async def test_rug_pull_is_flagged_but_not_blocked_in_monitor_mode(tmp_path):
 def test_invalid_mode_is_rejected(tmp_path):
     with pytest.raises(ValueError):
         Gateway(StubBackends(), EventLogger(tmp_path / "e.jsonl"), mode="enforcing")
+
+
+# --- evasion round 1: before and after ---
+
+BASELINE = Path(__file__).resolve().parent.parent / "policies" / "baseline.yaml"
+
+
+@pytest.mark.parametrize("scenario_id", ["A11", "A12", "A13", "A14"])
+async def test_phase4_baseline_policy_is_beaten_by_the_evasions(tmp_path, scenario_id):
+    """Keeps the 'before' numbers reproducible: these attacks beat the original policy."""
+    result = await run_scenario(
+        BY_ID[scenario_id], runs_dir=tmp_path, mode="enforce", policy_path=BASELINE
+    )
+    assert result.outcome == "SUCCEEDED"
+
+
+@pytest.mark.parametrize("scenario_id", ["A11", "A12", "A13", "A14"])
+async def test_current_policy_stops_the_evasions(tmp_path, scenario_id):
+    result = await run_scenario(BY_ID[scenario_id], runs_dir=tmp_path, mode="enforce")
+    assert result.outcome == "failed"
+
+
+async def test_sharing_internal_data_internally_still_works(tmp_path):
+    result = await run_scenario(BY_ID["B12"], runs_dir=tmp_path, mode="enforce")
+    assert result.outcome == "ok"

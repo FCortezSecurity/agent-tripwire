@@ -32,6 +32,8 @@ missing policy stops the gateway from starting: it fails closed.
 - Session call budget of 50
 - **Taint:** once any tool result looks like a secret, outbound tools are blocked for the
   rest of the session
+- **Flow rule:** after reading `docs/internal/`, email may only go to `example.com`, even
+  though `partner-example.org` is normally approved
 - **Tool pinning:** if a tool's name, description, or schema changes after first sight, the
   tool is hidden and blocked in enforce mode (rug pull, S7)
 
@@ -41,6 +43,12 @@ Scenario A10 reads a secret that sits in an allowed folder and emails it to an a
 domain. Every path and recipient check passes. With the taint rule removed the attack
 succeeds; with it, the email is denied. Scenario A09 uses an unapproved recipient and is
 blocked by the domain allowlist alone.
+
+## Policy files
+
+- `policies/default.yaml` is the current policy.
+- `policies/baseline.yaml` is the Phase 4 policy, kept unchanged so the evasion round's
+  "before" results stay reproducible (`--policy policies/baseline.yaml`).
 
 ## Known limitations
 

@@ -97,22 +97,35 @@ async def run_scenario(
     return RunResult(scenario, log_path, errors, succeeded)
 
 
-async def run_all(selected: list[Scenario], mode: str = "monitor") -> list[RunResult]:
-    runs_dir = RUNS_DIR if mode == "monitor" else ROOT / "logs" / f"runs-{mode}"
-    return [await run_scenario(sc, runs_dir=runs_dir, mode=mode) for sc in selected]
+async def run_all(
+    selected: list[Scenario], mode: str = "monitor", policy_path: Path | None = None
+) -> list[RunResult]:
+    suffix = f"-{policy_path.stem}" if policy_path else ""
+    runs_dir = (
+        RUNS_DIR if mode == "monitor" and not suffix else ROOT / "logs" / f"runs-{mode}{suffix}"
+    )
+    return [
+        await run_scenario(sc, runs_dir=runs_dir, mode=mode, policy_path=policy_path)
+        for sc in selected
+    ]
 
 
 def main() -> None:
     args = sys.argv[1:]
     mode = "monitor"
+    policy_path = None
     if "--mode" in args:
         index = args.index("--mode")
         mode = args[index + 1]
         del args[index : index + 2]
+    if "--policy" in args:
+        index = args.index("--policy")
+        policy_path = (ROOT / args[index + 1]).resolve()
+        del args[index : index + 2]
     selected = [s for s in ALL if not args or s.id in set(args)]
-    results = anyio.run(run_all, selected, mode)
+    results = anyio.run(run_all, selected, mode, policy_path)
 
-    print(f"\nmode: {mode}")
+    print(f"\nmode: {mode}   policy: {policy_path.name if policy_path else 'default'}")
     print(f"{'ID':<5}{'KIND':<8}{'THREAT':<8}{'OUTCOME':<11}NAME")
     for r in results:
         s = r.scenario

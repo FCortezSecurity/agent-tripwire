@@ -11,7 +11,7 @@ the session is tainted and outbound tools are blocked, whatever path or recipien
 """
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
 
@@ -44,12 +44,23 @@ class TaintRule(_Strict):
     deny_tools: list[str]  # tools blocked once the session is tainted
 
 
+class FlowRule(_Strict):
+    """Data read from certain paths may only go to approved recipients afterwards."""
+
+    id: str
+    after_reading: list[str]  # path prefixes that put the session under this rule
+    tool: str  # the outbound tool being restricted
+    argument: str  # which argument names the recipient
+    allowed_domains: list[str]  # recipients still allowed once the rule applies
+
+
 class Policy(_Strict):
     default: Literal["allow", "deny"] = "deny"
     max_calls_per_session: int | None = None
     pin_tools: bool = True  # detect tool definitions that change after first sight
     tools: dict[str, ToolRule] = Field(default_factory=dict)
     taint: TaintRule | None = None
+    flows: list[FlowRule] = Field(default_factory=list)
 
 
 def load_policy(path: Path) -> Policy:
@@ -61,6 +72,7 @@ def load_policy(path: Path) -> Policy:
 class PolicyState:
     calls: int = 0
     tainted: bool = False
+    flows: set[str] = field(default_factory=set)  # flow rules the session is now under
 
 
 @dataclass(frozen=True)
@@ -115,6 +127,13 @@ def evaluate(policy: Policy, tool: str, arguments: dict, state: PolicyState) -> 
     if state.tainted and policy.taint and tool in policy.taint.deny_tools:
         return _deny(f"taint.{tool}", "session saw secret-looking content, outbound blocked")
 
+    for flow in policy.flows:
+        if flow.id in state.flows and tool == flow.tool and flow.argument in arguments:
+            text = str(arguments[flow.argument])
+            domain = text.rsplit("@", 1)[-1].strip().lower() if "@" in text else ""
+            if domain not in {d.lower() for d in flow.allowed_domains}:
+                return _deny(f"flow.{flow.id}", "data read earlier may not leave to this recipient")
+
     for name, arg_rule in rule.arguments.items():
         if name in arguments:
             violation = _check_argument(tool, name, arguments[name], arg_rule)
@@ -127,3 +146,20 @@ def result_taints(policy: Policy, result_text: str) -> bool:
     if not policy.taint:
         return False
     return any(re.search(p, result_text) for p in policy.taint.patterns)
+
+
+def observe_call(policy: Policy, state: PolicyState, arguments: dict) -> list[str]:
+    """After a successful call, note which flow rules its path arguments put the session under.
+
+    Returns the ids of flow rules that newly apply.
+    """
+    newly = []
+    for key in ("path", "directory"):
+        if key not in arguments:
+            continue
+        path = normalize_path(str(arguments[key]))
+        for flow in policy.flows:
+            if flow.id not in state.flows and any(path.startswith(p) for p in flow.after_reading):
+                state.flows.add(flow.id)
+                newly.append(flow.id)
+    return newly

@@ -30,6 +30,7 @@ class Event(BaseModel):
     server: str | None = None
     tool_name: str | None = None
     arguments: dict[str, Any] | None = None
+    path_normalized: str | None = None  # what the policy sees: ./ and ../ collapsed
     tools: list[dict[str, Any]] | None = None
     is_error: bool | None = None
     result_text: str | None = None

@@ -44,6 +44,19 @@ def injection_then_action(events: list[dict], is_injection: Matcher, is_sensitiv
     return False
 
 
+def internal_read_then_external_send(
+    events: list[dict], is_internal_read: Matcher, is_external_send: Matcher
+) -> bool:
+    """Internal-only data read, then an email to someone outside the company soon after."""
+    calls = [e for e in events if e["event_type"] == "tool_call"]
+    for i, call in enumerate(calls):
+        if is_internal_read(call) and any(
+            is_external_send(c) for c in calls[i + 1 : i + 1 + WINDOW_CALLS]
+        ):
+            return True
+    return False
+
+
 CORRELATIONS = [
     Correlation(
         code="TW-101",
@@ -56,5 +69,13 @@ CORRELATIONS = [
         title="TW-102 Injection-style text followed by an outbound or sensitive call",
         level="high",
         check=lambda events, m: injection_then_action(events, m["injection"], m["sensitive"]),
+    ),
+    Correlation(
+        code="TW-103",
+        title="TW-103 Internal-only data read followed by an email to an external recipient",
+        level="high",
+        check=lambda events, m: internal_read_then_external_send(
+            events, m["internal_read"], m["external_send"]
+        ),
     ),
 ]

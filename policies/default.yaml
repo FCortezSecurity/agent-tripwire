@@ -36,5 +36,15 @@ tools:
 
 # After a tool returns something that looks like a secret, block all outbound tools.
 taint:
-  patterns: ['(?i)(api[_-]?key|service[_-]?key|password|secret|token)\s*[=:]\s*\S+']
+  patterns:
+    - '(?i)(api[_-]?key|service[_-]?key|secret|token|passw(or)?d|pwd|passcode|passphrase|credentials?|bearer|private[_-]?key)\s*[=:]\s*\S+|-----BEGIN [A-Z ]*PRIVATE KEY-----'
   deny_tools: [send_email]
+
+# Restricted data stays internal: after reading docs/internal/, email may only go to
+# internal recipients, even though partner-example.org is normally approved.
+flows:
+  - id: internal-stays-internal
+    after_reading: ['docs/internal/']
+    tool: send_email
+    argument: to
+    allowed_domains: [example.com]

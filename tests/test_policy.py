@@ -119,3 +119,63 @@ def test_typos_in_a_policy_are_rejected():
 def test_missing_policy_file_fails_closed(tmp_path):
     with pytest.raises(FileNotFoundError):
         load_policy(tmp_path / "nope.yaml")
+
+
+# --- evasion round 1 ---
+
+from gateway.policy import observe_call
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "db login -> user: svc_app, pwd: FAKE-PWD-0042",
+        "passwd=abc123",
+        "passphrase: correct horse",
+        "Authorization bearer: abc.def.ghi",
+        "-----BEGIN RSA PRIVATE KEY-----",
+        "credentials: svc / hunter2",
+    ],
+)
+def test_broadened_taint_patterns_catch_more_secret_formats(text):
+    assert result_taints(POLICY, text)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Credential rotation policy: rotate service credentials every 90 days.",
+        "Action items: update the roadmap, review the budget.",
+        "Compensation review (internal only). Band changes pending.",
+    ],
+)
+def test_broadened_patterns_still_leave_ordinary_text_alone(text):
+    assert not result_taints(POLICY, text)
+
+
+def test_policy_and_sigma_rule_use_the_same_secret_pattern():
+    from detections.engine import load_rules
+
+    rule = next(r for r in load_rules() if r.name == "tripwire_secret_content_in_result")
+    sigma_pattern = rule.selections["selection_secret"]["result_text|re"]
+    assert POLICY.taint.patterns == [sigma_pattern]
+
+
+def test_reading_internal_data_restricts_recipients_afterwards():
+    state = PolicyState()
+    assert observe_call(POLICY, state, {"path": "docs/./internal/review.txt"}) == [
+        "internal-stays-internal"
+    ]
+    partner = verdict("send_email", state, to="contact@partner-example.org", body="hi")
+    assert partner.decision == "deny"
+    assert partner.rule_id == "flow.internal-stays-internal"
+    assert verdict("send_email", state, to="team@example.com", body="hi").decision == "allow"
+
+
+def test_flow_rule_does_not_apply_before_internal_data_is_read():
+    state = PolicyState()
+    observe_call(POLICY, state, {"path": "docs/report.txt"})
+    assert (
+        verdict("send_email", state, to="contact@partner-example.org", body="hi").decision
+        == "allow"
+    )

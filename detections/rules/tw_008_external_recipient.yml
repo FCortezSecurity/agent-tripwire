@@ -1,0 +1,21 @@
+title: TW-008 Email to a recipient outside the company domain
+id: eb298471-eec2-49a1-afc1-d9d45362b737
+name: tripwire_external_send
+status: experimental
+description: >
+  The email tool is called with a recipient that is not at the company domain. A signal that
+  feeds TW-103; approved partners are normal, so it does not alert on its own.
+tags:
+  - owasp.llm02
+logsource:
+  product: agent_tripwire
+  category: tool_call
+detection:
+  selection:
+    tool_name: send_email
+  filter_internal:
+    arguments.to|endswith: '@example.com'
+  condition: selection and not filter_internal
+falsepositives:
+  - Routine email to approved partners and customers.
+level: low

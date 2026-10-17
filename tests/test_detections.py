@@ -2,12 +2,16 @@ import pytest
 
 from detections.correlations import injection_then_action, sensitive_read_then_outbound
 from detections.engine import _Condition, load_rules, matches
+from gateway.canaries import normalize_path
 
 RULES = {r.name: r for r in load_rules()}
 
 
 def call(tool: str, **arguments) -> dict:
-    return {"event_type": "tool_call", "tool_name": tool, "arguments": arguments}
+    event = {"event_type": "tool_call", "tool_name": tool, "arguments": arguments}
+    if "path" in arguments:  # the gateway logs the normalized path next to the raw one
+        event["path_normalized"] = normalize_path(arguments["path"])
+    return event
 
 
 def result(text: str) -> dict:
@@ -152,3 +156,35 @@ def test_injection_then_harmless_calls_does_not_fire():
 def test_weak_rules_are_signals_not_alerts():
     assert RULES["tripwire_sensitive_file_read"].level == "low"
     assert RULES["tripwire_injection_in_tool_result"].level == "low"
+
+
+def test_internal_read_matches_even_through_path_tricks():
+    rule = RULES["tripwire_internal_data_read"]
+    assert matches(rule, call("read_file", path="docs/internal/review.txt"))
+    assert matches(rule, call("read_file", path="docs/./internal/review.txt"))
+    assert matches(rule, call("read_file", path="docs/x/../internal/review.txt"))
+    assert not matches(rule, call("read_file", path="docs/report.txt"))
+
+
+def test_external_send_signal():
+    rule = RULES["tripwire_external_send"]
+    assert matches(rule, call("send_email", to="contact@partner-example.org"))
+    assert not matches(rule, call("send_email", to="team@example.com"))
+
+
+def test_internal_read_then_external_send_sequence():
+    from detections.correlations import internal_read_then_external_send
+
+    def is_read(e):
+        return matches(RULES["tripwire_internal_data_read"], e)
+
+    def is_send(e):
+        return matches(RULES["tripwire_external_send"], e)
+
+    attack = [call("read_file", path="docs/internal/a.txt"), call("send_email", to="x@partner.org")]
+    internal_only = [
+        call("read_file", path="docs/internal/a.txt"),
+        call("send_email", to="t@example.com"),
+    ]
+    assert internal_read_then_external_send(attack, is_read, is_send)
+    assert not internal_read_then_external_send(internal_only, is_read, is_send)

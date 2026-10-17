@@ -20,7 +20,7 @@ detection:
   selection_tool:
     tool_name: read_file
   selection_path:
-    arguments.path|contains:
+    path_normalized|contains:
       - 'secrets/'
       - '.env'
       - 'credential'

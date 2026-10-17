@@ -14,7 +14,7 @@ from mcp.server import Server, ServerRequestContext
 from mcp.server.stdio import stdio_server
 
 from gateway.backends import ROOT, Backends
-from gateway.canaries import CANARY_SERVER, CanaryRegistry
+from gateway.canaries import CANARY_SERVER, CanaryRegistry, normalize_path
 from gateway.events import Decision, Event, EventLogger, EventType
 from gateway.policy import (
     Policy,
@@ -22,6 +22,7 @@ from gateway.policy import (
     Verdict,
     evaluate,
     load_policy,
+    observe_call,
     result_taints,
 )
 
@@ -41,6 +42,11 @@ def _tool_fingerprint(tool: types.Tool) -> str:
         default=str,
     )
     return hashlib.sha256(material.encode()).hexdigest()
+
+
+def _normalized_path(arguments: dict) -> str | None:
+    value = arguments.get("path", arguments.get("directory"))
+    return normalize_path(str(value)) if value is not None else None
 
 
 def _result_text(result: types.CallToolResult) -> str:
@@ -137,7 +143,13 @@ class Gateway:
         if server is None:
             await self.backends.list_tools()  # refresh once in case tools changed
             server = self.backends.server_for(name)
-        self._log(EventType.TOOL_CALL, server=server, tool_name=name, arguments=arguments)
+        self._log(
+            EventType.TOOL_CALL,
+            server=server,
+            tool_name=name,
+            arguments=arguments,
+            path_normalized=_normalized_path(arguments),
+        )
         self._check_canaries(name, arguments, server)
 
         if server is None:
@@ -173,7 +185,7 @@ class Gateway:
             result_size=len(text),
             latency_ms=round((time.perf_counter() - started) * 1000, 2),
         )
-        self._update_taint(name, server, result, text)
+        self._observe_result(name, arguments, server, result, text)
         return result
 
     def _decide(self, name: str, arguments: dict) -> Verdict:
@@ -181,21 +193,33 @@ class Gateway:
             return Verdict(Decision.DENY, "pin.changed", "tool definition changed after first use")
         return evaluate(self.policy, name, arguments, self.state)
 
-    def _update_taint(
-        self, name: str, server: str, result: types.CallToolResult, text: str
+    def _observe_result(
+        self, name: str, arguments: dict, server: str, result: types.CallToolResult, text: str
     ) -> None:
-        if result.is_error or self.state.tainted or not result_taints(self.policy, text):
+        """Update session state from a finished call: flow rules and taint."""
+        if result.is_error:
             return
-        self.state.tainted = True
-        self._log(
-            EventType.POLICY_DECISION,
-            server=server,
-            tool_name=name,
-            decision=Decision.FLAG,
-            rule_id="taint.set",
-            reason="secret-looking content returned; outbound tools now restricted",
-            mode=self.mode,
-        )
+        for flow_id in observe_call(self.policy, self.state, arguments):
+            self._log(
+                EventType.POLICY_DECISION,
+                server=server,
+                tool_name=name,
+                decision=Decision.FLAG,
+                rule_id=f"flow.{flow_id}.set",
+                reason="session read restricted data; outbound recipients now limited",
+                mode=self.mode,
+            )
+        if not self.state.tainted and result_taints(self.policy, text):
+            self.state.tainted = True
+            self._log(
+                EventType.POLICY_DECISION,
+                server=server,
+                tool_name=name,
+                decision=Decision.FLAG,
+                rule_id="taint.set",
+                reason="secret-looking content returned; outbound tools now restricted",
+                mode=self.mode,
+            )
 
     def _check_canaries(self, name: str, arguments: dict, server: str | None) -> None:
         for hit in self.canaries.inspect_call(name, arguments):

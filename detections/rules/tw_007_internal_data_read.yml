@@ -1,0 +1,21 @@
+title: TW-007 Agent reads internal-only data
+id: 4ccbc1f6-773c-4cb2-8ec4-55c78e98e866
+name: tripwire_internal_data_read
+status: experimental
+description: >
+  A file tool reads from the internal-only folder. A signal that feeds TW-103; it does not
+  alert on its own because reading internal data is normal work.
+tags:
+  - owasp.llm02
+logsource:
+  product: agent_tripwire
+  category: tool_call
+detection:
+  selection:
+    tool_name: read_file
+    path_normalized|contains: 'docs/internal/'
+  condition: selection
+falsepositives:
+  - Any legitimate use of internal documents.
+  - Uses the normalized path, so docs/./internal/ and docs/x/../internal/ still match.
+level: low

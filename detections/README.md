@@ -12,6 +12,7 @@ Sigma rules for Agent Tripwire event logs (`logs/*.jsonl`), plus a local evaluat
 | `event_type` | tool_call, tool_result, tools_list |
 | `session_id`, `call_index` | one session per gateway run; index counts events in order |
 | `tool_name`, `server` | which tool and which backend |
+| `path_normalized` | the path with `./` and `../` collapsed, as the policy sees it. Use it for path rules |
 | `arguments.<name>` | tool arguments, flattened (for example `arguments.path`) |
 | `result_text`, `result_size`, `is_error` | tool output, truncated to 4000 characters |
 
@@ -25,6 +26,9 @@ Sigma rules for Agent Tripwire event logs (`logs/*.jsonl`), plus a local evaluat
 | TW-004 | Injection phrases in tool output | low (signal) | S2 |
 | TW-005 | Encoded blob in outbound message | medium | S4 |
 | TW-006 | Secret-looking content returned to the agent | high | S5, S6 |
+| TW-007 | Internal-only data read | low (signal) | S4 |
+| TW-008 | Email outside the company domain | low (signal) | S4 |
+| TW-103 | Internal read followed by external email (sequence) | high | S2, S4 |
 | TW-201 | Canary tripped (decoy tool, decoy file, or leaked token) | critical | S8 |
 | TW-101 | Sensitive read followed by outbound call (sequence) | high | S4, S6 |
 | TW-102 | Injection phrases followed by outbound or sensitive call (sequence) | high | S2 |
