@@ -4,7 +4,8 @@ name: tripwire_injection_in_tool_result
 status: experimental
 description: >
   A tool result contains phrases typical of indirect prompt injection, text written to
-  steer the agent rather than inform it. Covers S2.
+  steer the agent rather than inform it. Covers S2. A signal only: TW-102 raises the
+  alert when the agent then acts on it.
 tags:
   - owasp.llm01
   - atlas.aml.t0051
@@ -21,4 +22,4 @@ detection:
   condition: selection
 falsepositives:
   - Security awareness material and documentation about prompt injection.
-level: medium
+level: low

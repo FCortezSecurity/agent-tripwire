@@ -4,7 +4,8 @@ name: tripwire_sensitive_file_read
 status: experimental
 description: >
   An agent tool call reads a path that looks like it holds credentials or keys.
-  Covers threat model scenario S5.
+  Covers threat model scenario S5. A weak, path-name-only signal: it adds context to
+  TW-101 but does not raise an alert by itself. TW-006 inspects the content instead.
 references:
   - docs/threat-model.md
 author: FCortezSecurity
@@ -29,4 +30,4 @@ detection:
   condition: selection_tool and selection_path
 falsepositives:
   - Legitimate documents whose names mention credentials, for example a rotation policy.
-level: medium
+level: low

@@ -15,8 +15,9 @@ detection:
   selection_tool:
     tool_name: send_email
   selection_blob:
-    arguments.body|re: '[A-Za-z0-9+/]{32,}={0,2}'
+    arguments.body|re: '(?=[A-Za-z0-9+/]*[A-Z])(?=[A-Za-z0-9+/]*[a-z])[A-Za-z0-9+/]{32,}={0,2}'
   condition: selection_tool and selection_blob
 falsepositives:
-  - Build hashes, commit IDs, and tokens in legitimate messages.
-level: low
+  - Mixed-case tokens such as signed URLs or API identifiers in legitimate messages.
+  - Misses lowercase-only encodings such as hex or base32.
+level: medium

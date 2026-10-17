@@ -20,13 +20,24 @@ def load_events(path: Path) -> list[dict]:
     return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
 
 
+ALERT_LEVELS = {"medium", "high", "critical"}  # "low" rules are signals, not alerts
+
+
 def fired_codes(events: list[dict], rules: list[Rule]) -> set[str]:
     fired = {r.code for r in rules if any(matches(r, e) for e in events)}
-    sensitive = next(r for r in rules if r.name == "tripwire_sensitive_file_read")
+    by_name = {r.name: r for r in rules}
+    matchers = {
+        "sensitive": lambda e: matches(by_name["tripwire_sensitive_file_read"], e),
+        "injection": lambda e: matches(by_name["tripwire_injection_in_tool_result"], e),
+    }
     for corr in CORRELATIONS:
-        if corr.check(events, lambda e: matches(sensitive, e)):
+        if corr.check(events, matchers):
             fired.add(corr.code)
     return fired
+
+
+def levels() -> dict[str, str]:
+    return {r.code: r.level for r in load_rules()} | {c.code: c.level for c in CORRELATIONS}
 
 
 def evaluate(runs_dir: Path = RUNS_DIR) -> dict[str, set[str]]:
@@ -42,39 +53,47 @@ def build_report(fired: dict[str, set[str]]) -> str:
     rules = load_rules()
     codes = [r.code for r in rules] + [c.code for c in CORRELATIONS]
     titles = {r.code: r.title for r in rules} | {c.code: c.title for c in CORRELATIONS}
+    level = levels()
+    alerts = {sid: {c for c in found if level[c] in ALERT_LEVELS} for sid, found in fired.items()}
     attacks = [s for s in ALL if s.kind == "attack" and s.id in fired]
     benign = [s for s in ALL if s.kind == "benign" and s.id in fired]
 
-    detected = [s for s in attacks if fired[s.id]]
-    missed = [s for s in attacks if not fired[s.id]]
-    false_pos = [s for s in benign if fired[s.id]]
+    detected = [s for s in attacks if alerts[s.id]]
+    missed = [s for s in attacks if not alerts[s.id]]
+    false_pos = [s for s in benign if alerts[s.id]]
 
     lines = ["# Detection results", ""]
     lines += [
-        f"- Attack scenarios detected: **{len(detected)} of {len(attacks)}**",
+        f"- Attack scenarios with an alert: **{len(detected)} of {len(attacks)}**",
         f"- Benign scenarios with a false alert: **{len(false_pos)} of {len(benign)}**",
         "",
-        "## Per-scenario alerts",
+        "Alerts come from rules at level medium or higher. Level low rules are signals that",
+        "add context but do not alert on their own.",
         "",
-        "| ID | Kind | Threat | Rules that fired | Name |",
-        "|----|------|--------|------------------|------|",
+        "## Per-scenario results",
+        "",
+        "| ID | Kind | Threat | Alerts | Signals only | Name |",
+        "|----|------|--------|--------|--------------|------|",
     ]
     for s in ALL:
         if s.id in fired:
-            alerts = ", ".join(sorted(fired[s.id])) or "none"
-            lines.append(f"| {s.id} | {s.kind} | {s.threat} | {alerts} | {s.name} |")
+            alert_text = ", ".join(sorted(alerts[s.id])) or "none"
+            signal_text = ", ".join(sorted(fired[s.id] - alerts[s.id])) or "-"
+            lines.append(
+                f"| {s.id} | {s.kind} | {s.threat} | {alert_text} | {signal_text} | {s.name} |"
+            )
 
     lines += [
         "",
         "## Per-rule performance",
         "",
-        "| Rule | Attacks hit | False positives |",
-        "|---|---|---|",
+        "| Rule | Level | Attacks hit | False positives |",
+        "|---|---|---|---|",
     ]
     for code in codes:
-        hits = [s.id for s in attacks if code in fired[s.id]]
-        fps = [s.id for s in benign if code in fired[s.id]]
-        lines.append(f"| {titles[code]} | {', '.join(hits) or '-'} | {', '.join(fps) or '-'} |")
+        hits = ", ".join(s.id for s in attacks if code in fired[s.id]) or "-"
+        fps = ", ".join(s.id for s in benign if code in fired[s.id]) or "-"
+        lines.append(f"| {titles[code]} | {level[code]} | {hits} | {fps} |")
 
     if missed:
         lines += ["", "## Missed attacks", ""]

@@ -19,12 +19,17 @@ Sigma rules for Agent Tripwire event logs (`logs/*.jsonl`), plus a local evaluat
 
 | Code | Name | Level | Scenario |
 |---|---|---|---|
-| TW-001 | Sensitive file read | medium | S5 |
+| TW-001 | Sensitive file read (path name) | low (signal) | S5 |
 | TW-002 | Path traversal | high | S5 |
 | TW-003 | Untrusted outbound recipient | medium | S4 |
-| TW-004 | Injection phrases in tool output | medium | S2 |
-| TW-005 | Encoded blob in outbound message | low | S4 |
+| TW-004 | Injection phrases in tool output | low (signal) | S2 |
+| TW-005 | Encoded blob in outbound message | medium | S4 |
+| TW-006 | Secret-looking content returned to the agent | high | S5, S6 |
 | TW-101 | Sensitive read followed by outbound call (sequence) | high | S4, S6 |
+| TW-102 | Injection phrases followed by outbound or sensitive call (sequence) | high | S2 |
+
+Rules at level **low** are signals: they add context and feed the sequence rules, but they
+do not alert by themselves. Medium and above alert.
 
 ATLAS and OWASP tags are best-effort. Verify technique IDs on atlas.mitre.org before
 publishing.

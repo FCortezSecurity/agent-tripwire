@@ -16,8 +16,10 @@ detection:
   selection:
     tool_name: send_email
   filter_allowed:
-    arguments.to|endswith: '@example.com'
+    arguments.to|endswith:
+      - '@example.com'
+      - '@partner-example.org'
   condition: selection and not filter_allowed
 falsepositives:
-  - Legitimate email to external partners or customers.
+  - Legitimate email to a partner not yet on the allowlist. Add approved domains above.
 level: medium
