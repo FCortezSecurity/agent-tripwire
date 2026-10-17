@@ -30,9 +30,11 @@ class Event(BaseModel):
     server: str | None = None
     tool_name: str | None = None
     arguments: dict[str, Any] | None = None
+    tools: list[dict[str, Any]] | None = None
     is_error: bool | None = None
     result_text: str | None = None
     result_size: int | None = None
+    latency_ms: float | None = None
     decision: Decision | None = None
     rule_id: str | None = None
     reason: str | None = None
