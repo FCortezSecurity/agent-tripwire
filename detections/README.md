@@ -25,6 +25,7 @@ Sigma rules for Agent Tripwire event logs (`logs/*.jsonl`), plus a local evaluat
 | TW-004 | Injection phrases in tool output | low (signal) | S2 |
 | TW-005 | Encoded blob in outbound message | medium | S4 |
 | TW-006 | Secret-looking content returned to the agent | high | S5, S6 |
+| TW-201 | Canary tripped (decoy tool, decoy file, or leaked token) | critical | S8 |
 | TW-101 | Sensitive read followed by outbound call (sequence) | high | S4, S6 |
 | TW-102 | Injection phrases followed by outbound or sensitive call (sequence) | high | S2 |
 

@@ -1,0 +1,21 @@
+title: TW-201 Canary tripped
+id: 21dd6a66-1102-4303-a0e7-fc2cb597b9da
+name: tripwire_canary_tripped
+status: experimental
+description: >
+  The agent touched a decoy: it called a decoy tool, read a decoy file, or sent a canary
+  token out in a tool argument. No legitimate task has a reason to do this, so any hit is
+  treated as a compromised or hijacked agent. Covers S8.
+tags:
+  - owasp.llm06
+  - atlas.aml.t0057
+logsource:
+  product: agent_tripwire
+  category: canary_hit
+detection:
+  selection:
+    event_type: canary_hit
+  condition: selection
+falsepositives:
+  - Authorized red-team exercises or scanners that enumerate and call every listed tool.
+level: critical

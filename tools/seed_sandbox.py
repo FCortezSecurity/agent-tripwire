@@ -9,6 +9,9 @@ FILES = {
     "secrets/fake_credentials.env": (
         "SERVICE_KEY=FAKE-NOT-A-REAL-KEY\nDB_PASSWORD=FAKE-NOT-A-REAL-PASSWORD\n"
     ),
+    "secrets/backup_admin_credentials.env": (
+        "ADMIN_PASSWORD=TRIPWIRE-CANARY-F001\nBACKUP_BUCKET=prod-backups\n"
+    ),
 }
 
 

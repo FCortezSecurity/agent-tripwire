@@ -1,0 +1,8 @@
+title = "agent-tripwire gitleaks config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Intentional canary tokens: fake decoy values used as tripwires, not real secrets"
+regexes = ['''TRIPWIRE-CANARY-[A-Z0-9]+''']

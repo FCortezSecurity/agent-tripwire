@@ -14,6 +14,7 @@ from mcp.server import Server, ServerRequestContext
 from mcp.server.stdio import stdio_server
 
 from gateway.backends import ROOT, Backends
+from gateway.canaries import CANARY_SERVER, CanaryRegistry
 from gateway.events import Event, EventLogger, EventType
 
 
@@ -37,9 +38,12 @@ def _result_text(result: types.CallToolResult) -> str:
 
 
 class Gateway:
-    def __init__(self, backends: Backends, logger: EventLogger):
+    def __init__(
+        self, backends: Backends, logger: EventLogger, canaries: CanaryRegistry | None = None
+    ):
         self.backends = backends
         self.logger = logger
+        self.canaries = canaries or CanaryRegistry()
         self.session_id = uuid.uuid4().hex[:12]
         self._call_index = 0
 
@@ -60,6 +64,7 @@ class Gateway:
 
     async def on_list_tools(self, ctx: ServerRequestContext, params) -> types.ListToolsResult:
         merged = await self.backends.list_tools()
+        merged += [(CANARY_SERVER, tool) for tool in self.canaries.decoy_tools()]
         self._log(
             EventType.TOOLS_LIST,
             tools=[
@@ -79,11 +84,14 @@ class Gateway:
     ) -> types.CallToolResult:
         name = params.name
         arguments = params.arguments or {}
+        if self.canaries.is_decoy_tool(name):
+            return self._handle_decoy_tool(name, arguments)
         server = self.backends.server_for(name)
         if server is None:
             await self.backends.list_tools()  # refresh once in case tools changed
             server = self.backends.server_for(name)
         self._log(EventType.TOOL_CALL, server=server, tool_name=name, arguments=arguments)
+        self._check_canaries(name, arguments, server)
 
         if server is None:
             return self._error_result(name, None, f"unknown tool '{name}'")
@@ -105,6 +113,32 @@ class Gateway:
             latency_ms=round((time.perf_counter() - started) * 1000, 2),
         )
         return result
+
+    def _check_canaries(self, name: str, arguments: dict, server: str | None) -> None:
+        for hit in self.canaries.inspect_call(name, arguments):
+            self._log(
+                EventType.CANARY_HIT,
+                server=server,
+                tool_name=name,
+                arguments=arguments,
+                canary_id=hit.canary_id,
+                reason=f"{hit.kind}: {hit.reason}",
+            )
+
+    def _handle_decoy_tool(self, name: str, arguments: dict) -> types.CallToolResult:
+        """Log the call and the canary hit, then answer plausibly so the intruder keeps going."""
+        self._log(EventType.TOOL_CALL, server=CANARY_SERVER, tool_name=name, arguments=arguments)
+        self._check_canaries(name, arguments, CANARY_SERVER)
+        text = self.canaries.fake_response(name)
+        self._log(
+            EventType.TOOL_RESULT,
+            server=CANARY_SERVER,
+            tool_name=name,
+            is_error=False,
+            result_text=text,
+            result_size=len(text),
+        )
+        return types.CallToolResult(content=[types.TextContent(type="text", text=text)])
 
     def _error_result(self, name: str, server: str | None, message: str) -> types.CallToolResult:
         self._log(
