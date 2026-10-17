@@ -1,0 +1,32 @@
+title: TW-001 Agent reads a sensitive-looking file
+id: dbc9d0ad-7f74-4376-af00-4a2cab99efb7
+name: tripwire_sensitive_file_read
+status: experimental
+description: >
+  An agent tool call reads a path that looks like it holds credentials or keys.
+  Covers threat model scenario S5.
+references:
+  - docs/threat-model.md
+author: FCortezSecurity
+tags:
+  - owasp.llm02
+  - owasp.llm06
+  - atlas.aml.t0057
+logsource:
+  product: agent_tripwire
+  category: tool_call
+detection:
+  selection_tool:
+    tool_name: read_file
+  selection_path:
+    arguments.path|contains:
+      - 'secrets/'
+      - '.env'
+      - 'credential'
+      - '.aws'
+      - 'id_rsa'
+      - '.ssh'
+  condition: selection_tool and selection_path
+falsepositives:
+  - Legitimate documents whose names mention credentials, for example a rotation policy.
+level: medium

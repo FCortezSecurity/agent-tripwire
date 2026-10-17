@@ -1,0 +1,24 @@
+title: TW-004 Injection-style instructions inside tool output
+id: a34e1616-6b1b-4725-bfd9-184fc82daf51
+name: tripwire_injection_in_tool_result
+status: experimental
+description: >
+  A tool result contains phrases typical of indirect prompt injection, text written to
+  steer the agent rather than inform it. Covers S2.
+tags:
+  - owasp.llm01
+  - atlas.aml.t0051
+logsource:
+  product: agent_tripwire
+  category: tool_result
+detection:
+  selection:
+    result_text|contains:
+      - 'ignore previous instructions'
+      - 'ignore all previous instructions'
+      - 'note to ai assistant'
+      - 'do not mention this to the user'
+  condition: selection
+falsepositives:
+  - Security awareness material and documentation about prompt injection.
+level: medium

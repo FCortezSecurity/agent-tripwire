@@ -1,0 +1,23 @@
+title: TW-003 Outbound message to a non-allowlisted recipient domain
+id: a8ccf927-a2ee-4d46-b409-b9a862b0c8d9
+name: tripwire_untrusted_recipient
+status: experimental
+description: >
+  The email tool is called with a recipient outside the allowlisted domain. This is a
+  common exfiltration channel. Covers S4.
+tags:
+  - owasp.llm02
+  - owasp.llm06
+  - atlas.aml.t0057
+logsource:
+  product: agent_tripwire
+  category: tool_call
+detection:
+  selection:
+    tool_name: send_email
+  filter_allowed:
+    arguments.to|endswith: '@example.com'
+  condition: selection and not filter_allowed
+falsepositives:
+  - Legitimate email to external partners or customers.
+level: medium

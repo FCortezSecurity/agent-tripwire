@@ -1,0 +1,22 @@
+title: TW-005 Long encoded string in an outbound message
+id: df368ba0-177e-493d-87b4-f1480afc7c07
+name: tripwire_encoded_blob_outbound
+status: experimental
+description: >
+  An outbound email body contains a long base64-like string, a way to hide stolen data
+  from simple keyword checks. Covers S4.
+tags:
+  - owasp.llm02
+  - atlas.aml.t0057
+logsource:
+  product: agent_tripwire
+  category: tool_call
+detection:
+  selection_tool:
+    tool_name: send_email
+  selection_blob:
+    arguments.body|re: '[A-Za-z0-9+/]{32,}={0,2}'
+  condition: selection_tool and selection_blob
+falsepositives:
+  - Build hashes, commit IDs, and tokens in legitimate messages.
+level: low

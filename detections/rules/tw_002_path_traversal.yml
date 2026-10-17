@@ -1,0 +1,21 @@
+title: TW-002 Path traversal in a file tool argument
+id: d1bf9151-3e3b-4453-8e1b-7a685eab2c37
+name: tripwire_path_traversal
+status: experimental
+description: >
+  A file tool argument contains parent-directory sequences, a sign of an attempt to
+  leave the workspace. Covers S5.
+tags:
+  - owasp.llm06
+logsource:
+  product: agent_tripwire
+  category: tool_call
+detection:
+  selection:
+    arguments.path|contains:
+      - '../'
+      - '..\'
+  condition: selection
+falsepositives:
+  - A tool that legitimately uses relative paths with parent references.
+level: high
