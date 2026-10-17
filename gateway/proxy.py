@@ -15,7 +15,18 @@ from mcp.server.stdio import stdio_server
 
 from gateway.backends import ROOT, Backends
 from gateway.canaries import CANARY_SERVER, CanaryRegistry
-from gateway.events import Event, EventLogger, EventType
+from gateway.events import Decision, Event, EventLogger, EventType
+from gateway.policy import (
+    Policy,
+    PolicyState,
+    Verdict,
+    evaluate,
+    load_policy,
+    result_taints,
+)
+
+BLOCKED_MESSAGE = "This action is not permitted by security policy."
+DEFAULT_POLICY = ROOT / "policies" / "default.yaml"
 
 
 def _tool_fingerprint(tool: types.Tool) -> str:
@@ -39,11 +50,23 @@ def _result_text(result: types.CallToolResult) -> str:
 
 class Gateway:
     def __init__(
-        self, backends: Backends, logger: EventLogger, canaries: CanaryRegistry | None = None
+        self,
+        backends: Backends,
+        logger: EventLogger,
+        canaries: CanaryRegistry | None = None,
+        policy: Policy | None = None,
+        mode: str = "monitor",
     ):
+        if mode not in {"monitor", "enforce"}:
+            raise ValueError(f"mode must be 'monitor' or 'enforce', not {mode!r}")
         self.backends = backends
         self.logger = logger
         self.canaries = canaries or CanaryRegistry()
+        self.policy = policy or Policy()
+        self.mode = mode
+        self.state = PolicyState()
+        self._pins: dict[str, str] = {}  # tool name -> fingerprint seen first
+        self._changed: set[str] = set()  # tools whose definition changed since first sight
         self.session_id = uuid.uuid4().hex[:12]
         self._call_index = 0
 
@@ -64,6 +87,8 @@ class Gateway:
 
     async def on_list_tools(self, ctx: ServerRequestContext, params) -> types.ListToolsResult:
         merged = await self.backends.list_tools()
+        if self.policy.pin_tools:
+            merged = self._apply_pins(merged)
         merged += [(CANARY_SERVER, tool) for tool in self.canaries.decoy_tools()]
         self._log(
             EventType.TOOLS_LIST,
@@ -78,6 +103,28 @@ class Gateway:
             ],
         )
         return types.ListToolsResult(tools=[tool for _, tool in merged])
+
+    def _apply_pins(self, merged: list) -> list:
+        """Remember each tool's first definition. A later change is a rug pull (S7)."""
+        visible = []
+        for server, tool in merged:
+            fingerprint = _tool_fingerprint(tool)
+            first_seen = self._pins.setdefault(tool.name, fingerprint)
+            if first_seen != fingerprint and tool.name not in self._changed:
+                self._changed.add(tool.name)
+                self._log(
+                    EventType.POLICY_DECISION,
+                    server=server,
+                    tool_name=tool.name,
+                    decision=Decision.DENY,
+                    rule_id="pin.changed",
+                    reason="tool definition changed after first use",
+                    mode=self.mode,
+                )
+            if tool.name in self._changed and self.mode == "enforce":
+                continue  # hide the changed tool until a human re-approves it
+            visible.append((server, tool))
+        return visible
 
     async def on_call_tool(
         self, ctx: ServerRequestContext, params: types.CallToolRequestParams
@@ -96,6 +143,20 @@ class Gateway:
         if server is None:
             return self._error_result(name, None, f"unknown tool '{name}'")
 
+        verdict = self._decide(name, arguments)
+        self._log(
+            EventType.POLICY_DECISION,
+            server=server,
+            tool_name=name,
+            decision=verdict.decision,
+            rule_id=verdict.rule_id,
+            reason=verdict.reason,
+            mode=self.mode,
+        )
+        self.state.calls += 1
+        if verdict.decision is Decision.DENY and self.mode == "enforce":
+            return self._error_result(name, server, BLOCKED_MESSAGE)
+
         started = time.perf_counter()
         try:
             result = await self.backends.call(server, name, arguments)
@@ -112,7 +173,29 @@ class Gateway:
             result_size=len(text),
             latency_ms=round((time.perf_counter() - started) * 1000, 2),
         )
+        self._update_taint(name, server, result, text)
         return result
+
+    def _decide(self, name: str, arguments: dict) -> Verdict:
+        if name in self._changed:
+            return Verdict(Decision.DENY, "pin.changed", "tool definition changed after first use")
+        return evaluate(self.policy, name, arguments, self.state)
+
+    def _update_taint(
+        self, name: str, server: str, result: types.CallToolResult, text: str
+    ) -> None:
+        if result.is_error or self.state.tainted or not result_taints(self.policy, text):
+            return
+        self.state.tainted = True
+        self._log(
+            EventType.POLICY_DECISION,
+            server=server,
+            tool_name=name,
+            decision=Decision.FLAG,
+            rule_id="taint.set",
+            reason="secret-looking content returned; outbound tools now restricted",
+            mode=self.mode,
+        )
 
     def _check_canaries(self, name: str, arguments: dict, server: str | None) -> None:
         for hit in self.canaries.inspect_call(name, arguments):
@@ -154,11 +237,14 @@ class Gateway:
         )
 
 
-async def run(log_path: Path, backends: Backends | None = None) -> None:
+async def run(
+    log_path: Path, policy_path: Path, mode: str, backends: Backends | None = None
+) -> None:
+    policy = load_policy(policy_path)  # an invalid policy stops startup: fail closed
     backends = backends or Backends()
     await backends.start()
     try:
-        gateway = Gateway(backends, EventLogger(log_path))
+        gateway = Gateway(backends, EventLogger(log_path), policy=policy, mode=mode)
         server = Server(
             "agent-tripwire",
             on_list_tools=gateway.on_list_tools,
@@ -172,5 +258,7 @@ async def run(log_path: Path, backends: Backends | None = None) -> None:
 
 def main() -> None:
     log_path = Path(os.environ.get("TRIPWIRE_LOG", ROOT / "logs" / "events.jsonl"))
-    print(f"agent-tripwire gateway starting, logging to {log_path}", file=sys.stderr)
-    anyio.run(run, log_path)
+    policy_path = Path(os.environ.get("TRIPWIRE_POLICY", DEFAULT_POLICY))
+    mode = os.environ.get("TRIPWIRE_MODE", "monitor")
+    print(f"agent-tripwire gateway starting in {mode} mode, log: {log_path}", file=sys.stderr)
+    anyio.run(run, log_path, policy_path, mode)

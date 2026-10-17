@@ -38,6 +38,7 @@ class Event(BaseModel):
     decision: Decision | None = None
     rule_id: str | None = None
     canary_id: str | None = None
+    mode: str | None = None
     reason: str | None = None
 
     @field_validator("result_text")

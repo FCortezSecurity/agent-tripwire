@@ -1,0 +1,40 @@
+# Agent Tripwire default policy. Default deny: anything not listed here is blocked.
+default: deny
+max_calls_per_session: 50
+pin_tools: true
+
+tools:
+  list_files:
+    arguments:
+      directory:
+        kind: path
+        deny_patterns: ['(^|/)\.\.(/|$)']   # never list outside the workspace
+  read_file:
+    arguments:
+      path:
+        kind: path
+        allow_prefixes: ['docs/']           # allowlist: only the docs folder is readable
+  write_file:
+    arguments:
+      path:
+        kind: path
+        allow_prefixes: ['docs/']
+      content:
+        max_length: 20000
+  send_email:
+    arguments:
+      to:
+        kind: email
+        allowed_domains: [example.com, partner-example.org]
+      body:
+        max_length: 2000
+        # long mixed-case base64-like strings (a way to smuggle data past keyword checks)
+        deny_patterns: ['(?=[A-Za-z0-9+/]*[A-Z])(?=[A-Za-z0-9+/]*[a-z])[A-Za-z0-9+/]{32,}={0,2}']
+  list_notes: {}
+  get_note: {}
+  search_notes: {}
+
+# After a tool returns something that looks like a secret, block all outbound tools.
+taint:
+  patterns: ['(?i)(api[_-]?key|service[_-]?key|password|secret|token)\s*[=:]\s*\S+']
+  deny_tools: [send_email]

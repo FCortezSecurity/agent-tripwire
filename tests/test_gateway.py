@@ -73,8 +73,9 @@ async def test_every_call_is_logged_with_increasing_index(tmp_path):
         await client.list_tools()
         await client.call_tool("get_note", {"note_id": "1"})
     events = _events(log)
-    assert [e["event_type"] for e in events] == ["tools_list", "tool_call", "tool_result"]
-    assert [e["call_index"] for e in events] == [0, 1, 2]
+    kinds = [e["event_type"] for e in events]
+    assert kinds == ["tools_list", "tool_call", "policy_decision", "tool_result"]
+    assert [e["call_index"] for e in events] == [0, 1, 2, 3]
     assert len({e["session_id"] for e in events}) == 1
     assert events[0]["tools"][0]["sha256"]
 
