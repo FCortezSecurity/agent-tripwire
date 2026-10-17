@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "agent-tripwire"
+version = "0.0.1"
+requires-python = ">=3.11"
+dependencies = ["mcp", "pydantic", "pyyaml", "structlog"]
+
+[tool.setuptools.packages.find]
+include = ["gateway*"]
+
+[tool.ruff]
+line-length = 100
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
