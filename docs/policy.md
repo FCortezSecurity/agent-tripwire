@@ -34,8 +34,7 @@ missing policy stops the gateway from starting: it fails closed.
   rest of the session
 - **Flow rule:** after reading `docs/internal/`, email may only go to `example.com`, even
   though `partner-example.org` is normally approved
-- **Tool pinning:** if a tool's name, description, or schema changes after first sight, the
-  tool is hidden and blocked in enforce mode (rug pull, S7)
+- **Tool pinning:** the gateway records a tool's name, description, and schema when first observed, then rechecks the live definition immediately before each call. A changed definition is logged as `pin.changed`. In `enforce` mode, the changed tool is hidden from listings and its calls are blocked; in `monitor` mode, the change is logged but calls are allowed to continue. This catches definition changes even when the client does not request the tool list again (rug pull, S7).
 
 ## Why taint exists (ablation)
 
