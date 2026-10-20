@@ -28,6 +28,9 @@ Full tables: [`docs/results/policy-results.md`](docs/results/policy-results.md) 
 
 ## How it works
 
+![Agent Tripwire system architecture](docs/img/architecture.png)
+
+*The agent's MCP requests pass through the gateway, which logs, checks canaries, evaluates policy, and either blocks or forwards each call. The event log feeds the Sigma and sequence detections.*
 ```mermaid
 flowchart LR
     Agent["AI agent"] --> GW["Tripwire gateway"]
