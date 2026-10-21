@@ -15,6 +15,7 @@ from mcp.server.stdio import stdio_server
 
 from gateway.backends import ROOT, Backends
 from gateway.canaries import CANARY_SERVER, CanaryRegistry, normalize_path
+from gateway.egress import CrossCallEgressDetector
 from gateway.events import Decision, Event, EventLogger, EventType
 from gateway.policy import (
     Policy,
@@ -72,6 +73,7 @@ class Gateway:
         self.policy = policy or Policy()
         self.mode = mode
         self.state = PolicyState()
+        self.egress = CrossCallEgressDetector()
 
         # Tool name -> fingerprint of the first observed definition.
         self._pins: dict[str, str] = {}
@@ -212,6 +214,17 @@ class Gateway:
 
         verdict = self._decide(name, arguments)
 
+        # Detect previously observed result tokens split across Base64 emails.
+        if verdict.decision is Decision.ALLOW and name == "send_email":
+            body = arguments.get("body")
+            recipient = arguments.get("to", "")
+            if isinstance(body, str) and self.egress.would_leak(body, str(recipient)):
+                verdict = Verdict(
+                    Decision.DENY,
+                    "egress.cross_call_encoded_match",
+                    "outbound content matches a token observed in prior tool results",
+                )
+
         self._log(
             EventType.POLICY_DECISION,
             server=server,
@@ -270,7 +283,13 @@ class Gateway:
         """Update session state from a completed call: flow rules and taint."""
         if result.is_error:
             return
+        # Only successful results and outbound calls update detector state.
+        self.egress.observe_result(text)
 
+        if name == "send_email":
+            body = arguments.get("body")
+            if isinstance(body, str):
+                self.egress.commit_outbound(body, str(arguments.get("to", "")))
         for flow_id in observe_call(self.policy, self.state, arguments):
             self._log(
                 EventType.POLICY_DECISION,

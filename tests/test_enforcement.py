@@ -1,3 +1,4 @@
+import base64
 import json
 from pathlib import Path
 
@@ -7,7 +8,7 @@ from mcp import types
 from attacks.runner import run_scenario
 from attacks.scenarios import ALL
 from gateway.events import EventLogger
-from gateway.policy import Policy
+from gateway.policy import Policy, load_policy
 from gateway.proxy import BLOCKED_MESSAGE, Gateway
 
 BY_ID = {s.id: s for s in ALL}
@@ -167,3 +168,141 @@ async def test_current_policy_stops_the_evasions(tmp_path, scenario_id):
 async def test_sharing_internal_data_internally_still_works(tmp_path):
     result = await run_scenario(BY_ID["B12"], runs_dir=tmp_path, mode="enforce")
     assert result.outcome == "ok"
+
+
+class CrossCallBackends:
+    """Local backend that records outbound calls for the cross-call test."""
+
+    SECRET = "ORBIT-7QX9-NOVA-4K2M"
+
+    def __init__(self):
+        self.sent_bodies = []
+
+    async def list_tools(self):
+        return [
+            (
+                "files",
+                types.Tool(
+                    name="read_file",
+                    description="Read a workspace document.",
+                    input_schema={"type": "object"},
+                ),
+            ),
+            (
+                "email",
+                types.Tool(
+                    name="send_email",
+                    description="Send an email.",
+                    input_schema={"type": "object"},
+                ),
+            ),
+        ]
+
+    def server_for(self, name):
+        return {"read_file": "files", "send_email": "email"}.get(name)
+
+    async def call(self, server, name, arguments):
+        if name == "read_file":
+            text = f"Customer reference: {self.SECRET}"
+        else:
+            self.sent_bodies.append(arguments["body"])
+            text = "Email sent."
+
+        return types.CallToolResult(content=[types.TextContent(type="text", text=text)])
+
+
+async def test_cross_call_encoded_fragments_are_blocked(tmp_path):
+    """Block encoded data exfiltrated across outbound calls."""
+    backends = CrossCallBackends()
+    policy_path = Path(__file__).resolve().parent.parent / "policies" / "default.yaml"
+    gateway = Gateway(
+        backends,
+        EventLogger(tmp_path / "crosscall.jsonl"),
+        policy=load_policy(policy_path),
+        mode="enforce",
+    )
+
+    await gateway.on_list_tools(None, None)
+
+    # Read an unlabeled synthetic value that does not trigger the taint rules.
+    read_result = await gateway.on_call_tool(
+        None,
+        types.CallToolRequestParams(name="read_file", arguments={"path": "docs/report.txt"}),
+    )
+    assert not read_result.is_error
+
+    encoded = base64.b64encode(backends.SECRET.encode()).decode("ascii")
+    chunks = [encoded[i : i + 18] for i in range(0, len(encoded), 18)]
+    assert len(chunks) >= 2
+    assert all(len(chunk) < 32 for chunk in chunks)
+
+    # Send each fragment in a separate call to an otherwise approved recipient.
+    # The first fragment is allowed; the fragment that completes the token is blocked.
+    for index, chunk in enumerate(chunks):
+        result = await gateway.on_call_tool(
+            None,
+            types.CallToolRequestParams(
+                name="send_email",
+                arguments={
+                    "to": "contact@partner-example.org",
+                    "subject": "Reference",
+                    "body": chunk,
+                },
+            ),
+        )
+
+        if index == len(chunks) - 1:
+            assert result.is_error
+            assert "security policy" in result.content[0].text.lower()
+        else:
+            assert not result.is_error
+
+    # The blocked fragment never reaches the outbound backend.
+    assert backends.sent_bodies == chunks[:-1]
+
+
+async def test_cross_call_encoded_fragments_are_observed_in_monitor_mode(tmp_path):
+    """Monitor mode logs the suspected leak but does not block the call."""
+    backends = CrossCallBackends()
+    policy_path = Path(__file__).resolve().parent.parent / "policies" / "default.yaml"
+    log_path = tmp_path / "monitor.jsonl"
+    gateway = Gateway(
+        backends,
+        EventLogger(log_path),
+        policy=load_policy(policy_path),
+        mode="monitor",
+    )
+
+    await gateway.on_list_tools(None, None)
+
+    read_result = await gateway.on_call_tool(
+        None,
+        types.CallToolRequestParams(
+            name="read_file",
+            arguments={"path": "docs/report.txt"},
+        ),
+    )
+    assert not read_result.is_error
+
+    encoded = base64.b64encode(backends.SECRET.encode()).decode("ascii")
+    chunks = [encoded[i : i + 18] for i in range(0, len(encoded), 18)]
+
+    for chunk in chunks:
+        result = await gateway.on_call_tool(
+            None,
+            types.CallToolRequestParams(
+                name="send_email",
+                arguments={
+                    "to": "contact@partner-example.org",
+                    "subject": "Reference",
+                    "body": chunk,
+                },
+            ),
+        )
+        assert not result.is_error
+
+    # Monitor mode allows all fragments through, including the flagged one.
+    assert backends.sent_bodies == chunks
+
+    # Verify the gateway recorded the cross-call detection.
+    assert "egress.cross_call_encoded_match" in log_path.read_text(encoding="utf-8")
