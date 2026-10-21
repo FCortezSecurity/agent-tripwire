@@ -170,7 +170,7 @@ tests/        unit and integration tests
 - **Secret detection is a pattern list.** A bare secret with no recognizable pattern may not taint a session.
 - **Sensitivity depends on folders.** The flow rule only protects data stored under `docs/internal/`.
 - **Taint is session-wide.** A legitimate task that reads a file containing a password can lose email capability for the rest of that session, a deliberate utility trade-off.
-- **Egress detection is targeted, not general-purpose DLP.** It looks for previously observed token-like strings in eligible Base64 email content across calls to the same recipient. It does not cover arbitrary encodings, mixed prose and encoded data, other outbound channels, or tokens the gateway has not observed. Its bounded state also limits how much history it can retain.
+- **Egress detection is targeted, not general-purpose DLP.** The detector checks eligible Base64 email content across successive calls to the same recipient for previously observed token-like strings. Known gaps include alternating recipients, an intervening benign message, text prefixes mixed into chunks, out-of-order chunks, URL-safe Base64, hex encoding, other outbound channels, and tokens the gateway has not observed. Its bounded state also limits how much history it can retain.
 - **Tool pinning checks definitions, not behavior.** A backend can change what a tool does without changing its name, description, or schema. That kind of behavioral change is not detected by definition fingerprinting alone.
 - **Lab tools only.** The three tool servers are sandboxed stand-ins. Nothing here has been tested against real third-party MCP servers.
 
