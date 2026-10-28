@@ -1,18 +1,48 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "agent-tripwire"
-version = "0.0.1"
+version = "0.9.0"   # bump to 1.0.0 when you tag the release
+description = "Runtime security gateway for AI agents and MCP tools: policy enforcement, attack detection, and canary traps."
+readme = "README.md"
 requires-python = ">=3.11"
-dependencies = ["mcp", "pydantic", "pyyaml", "structlog"]
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "YOUR NAME" }]
+keywords = ["mcp", "ai-security", "llm-security", "prompt-injection", "detection-engineering", "sigma"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Information Technology",
+    "Topic :: Security",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+dependencies = [
+    "mcp>=2.3,<3",
+    "pydantic>=2.14,<3",
+    "pyyaml>=6.0,<7",
+    "structlog>=26.1",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "ruff>=0.6"]
+
+[project.urls]
+Homepage = "https://github.com/FCortezSecurity/agent-tripwire"
+Issues = "https://github.com/FCortezSecurity/agent-tripwire/issues"
 
 [tool.setuptools.packages.find]
 include = ["gateway*"]
 
 [tool.ruff]
 line-length = 100
+target-version = "py311"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+addopts = "-ra"
+markers = [
+    "slow: long-running tests (skip with -m 'not slow')",
+]
