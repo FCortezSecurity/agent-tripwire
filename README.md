@@ -159,6 +159,7 @@ detections/   Sigma rules, local evaluator, sequence rules
 attacks/      scripted agent scenarios, runner, monitor-vs-enforce comparison
 policies/     default policy and the saved baseline used for the evasion round
 tools/        sandboxed lab tool servers (files, email, notes)
+dashboard/    TODO: one-line description
 docs/         threat model, policy, canaries, egress detection, tuning log, results
 tests/        unit and integration tests
 ```
