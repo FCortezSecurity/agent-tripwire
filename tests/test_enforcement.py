@@ -12,7 +12,7 @@ from gateway.policy import Policy, load_policy
 from gateway.proxy import BLOCKED_MESSAGE, Gateway
 
 BY_ID = {s.id: s for s in ALL}
-pytestmark = pytest.mark.anyio
+pytestmark = [pytest.mark.anyio, pytest.mark.slow]
 
 
 @pytest.fixture

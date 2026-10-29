@@ -18,7 +18,7 @@ from tools.seed_sandbox import FILES
 
 ROOT = Path(__file__).resolve().parent.parent
 BY_ID = {s.id: s for s in ALL}
-pytestmark = pytest.mark.anyio
+pytestmark = [pytest.mark.anyio, pytest.mark.slow]
 
 
 @pytest.fixture

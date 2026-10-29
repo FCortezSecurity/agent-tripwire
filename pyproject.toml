@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "agent-tripwire"
-version = "1.0.0"  # bump to 1.0.0 when you tag the release
+version = "1.0.0"
 description = "Runtime security gateway for AI agents and MCP tools: policy enforcement, attack detection, and canary traps."
 readme = "README.md"
 requires-python = ">=3.11"
