@@ -127,7 +127,7 @@ python -m venv .venv
 source .venv/bin/activate        # Windows: .venv\Scripts\Activate.ps1
 pip install -e ".[dev]"
 
-pytest                           # 136 tests, roughly 4 to 5 minutes
+pytest -m "not slow"             # 90 fast tests, about 30 seconds (plain pytest runs all 141, roughly 4 to 5 minutes)
 python -m attacks.compare        # monitor vs enforce, writes docs/results/policy-results.md
 python -m detections.evaluate    # scores the rules, writes docs/results/detection-results.md
 ```
