@@ -98,7 +98,7 @@ Twelve rules analyze the gateway's event log: single-event Sigma rules plus sequ
 | Done | Single-event Sigma rules, evaluated by a local evaluator |
 | Done | Sequence rules, written in Python |
 | Drafted, untested | Splunk equivalent of the sequence rules |
-| Planned | Converting the single-event rules with pySigma |
+| Done | Single-event rules convert to Splunk and Elasticsearch queries with pySigma ([results](docs/results/sigma-conversion.md)); generated, not run on a live SIEM |
 
 Plain Sigma matches one event at a time, which is why the sequence rules live in Python.
 
@@ -191,12 +191,13 @@ ruff check .
 
 - [ ] Run a local model as the agent and report results in a separate table from the scripted ones
 - [ ] Run the attacks from [`mcp-security-lab`](https://github.com/FCortezSecurity/mcp-security-lab) through the gateway and publish hits and misses
-- [ ] Convert the single-event rules with pySigma, and test a Splunk conversion
+- [x] Convert the single-event rules with pySigma, and test a Splunk conversion
 - [x] Measure the gateway's latency overhead per tool call (about 10 ms, see [latency results](docs/results/latency-results.md))
-
+- [ ] Run the converted queries on a live Splunk or Elasticsearch
 ## Documentation
 
 [Threat model](docs/threat-model.md) · [Policy engine](docs/policy.md) · [Canaries](docs/canaries.md) · [Egress detection](docs/egress-detection.md) · [Detection tuning log](docs/results/tuning-log.md) · [Evasion round 1](docs/evasion-round-1.md) · [Policy results](docs/results/policy-results.md) · [Detection results](docs/results/detection-results.md) · [Latency results](docs/results/latency-results.md)
+[Sigma conversion](docs/results/sigma-conversion.md)
 
 ## Acknowledgments
 
