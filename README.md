@@ -62,16 +62,16 @@ The gateway sits in the path of every tool call. Policy, detectors, and decoys a
 **What happens to each call:**
 
 ```mermaid
-flowchart LR
-    A([Tool call]) --> B["Log and<br/>normalize args"]
-    B --> C["Canary<br/>check"]
-    C --> D["Pinned definition<br/>recheck"]
-    D --> E["Policy<br/>evaluation"]
-    E --> F["Base64 egress<br/>check"]
+flowchart TD
+    A([Tool call]) --> B["Log and normalize arguments"]
+    B --> C["Canary check"]
+    C --> D["Pinned definition recheck"]
+    D --> E["Policy evaluation"]
+    E --> F["Base64 egress check"]
     F --> G{Verdict}
-    G -- "allowed, or denied in monitor mode" --> H["Forward to<br/>real tool"]
-    G -- "denied in enforce mode" --> I["Generic block<br/>message"]
-    H --> J[("Log result,<br/>update session state")]
+    G -- "allowed, or denied in monitor mode" --> H["Forward to real tool"]
+    G -- "denied in enforce mode" --> I["Generic block message"]
+    H --> J[("Log result, update session state")]
     I --> J
 ```
 
@@ -127,7 +127,7 @@ python -m venv .venv
 source .venv/bin/activate        # Windows: .venv\Scripts\Activate.ps1
 pip install -e ".[dev]"
 
-pytest -m "not slow"             # 90 fast tests, about 30 seconds (plain pytest runs all 141, roughly 4 to 5 minutes)
+pytest -m "not slow"             # 90 fast tests, ~30 s (all 141: ~4 min)
 python -m attacks.compare        # monitor vs enforce, writes docs/results/policy-results.md
 python -m detections.evaluate    # scores the rules, writes docs/results/detection-results.md
 ```
@@ -191,7 +191,7 @@ ruff check .
 
 - [ ] Run a local model as the agent and report results in a separate table from the scripted ones
 - [ ] Run the attacks from [`mcp-security-lab`](https://github.com/FCortezSecurity/mcp-security-lab) through the gateway and publish hits and misses
-- [x] Convert the single-event rules with pySigma, and test a Splunk conversion
+- [x] Convert the single-event rules with pySigma (every rule converts to Splunk and Elasticsearch; two regexes need rewriting for Elasticsearch)
 - [x] Measure the gateway's latency overhead per tool call (about 10 ms, see [latency results](docs/results/latency-results.md))
 - [ ] Run the converted queries on a live Splunk or Elasticsearch
 ## Documentation
